@@ -6,3 +6,5 @@ langchain
 openai
 langchain-community
 python-multipart 
+serpapi
+google-search-results
