@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pytesseract
+Pillow
+langchain
+openai
+langchain-community
+python-multipart 
