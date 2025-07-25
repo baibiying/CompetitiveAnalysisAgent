@@ -192,6 +192,7 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
                         "3. 与其他类似产品的优势分析(advantage_analysis:str)；\n"
                         "4. 与其他类似产品的劣势分析(disadvantage_analysis:str)；\n"
                         "5. 营养成分分析(nutrition_analysis:str), 简洁列出2-3种该产品包含的维生素, 提供每100克可食部分的热量, GI值（血糖生成指数）, 纤维含量,健康功效。\n"
+                        "6. 产品整体描述（description:str）\n"
                         "营养成分分析最多35个字，其他分析部分限15个字以内。"
                         "最终以JSON格式返回，字段包括：product_name, price, masket_price_range, fresh_level, sweet_level, sour_level, water_level, crisp_level, description, price_analysis, price_unit, advantage_analysis, disadvantage_analysis, nutrition_analysis"
                     )},
