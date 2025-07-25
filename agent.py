@@ -49,6 +49,40 @@ def convert_to_jin(price_str):
     # 兜底：如果单位未知，直接返回原值
     return value, f'未知单位{unit}，未换算'
 
+def postprocess_price(data):
+    """根据price_unit和total_weight自动换算为每斤单价"""
+    price = data.get('price')
+    price_unit = data.get('price_unit')
+    total_weight = data.get('total_weight')
+    try:
+        price = float(price)
+    except Exception:
+        return data
+    if price and price_unit:
+        try:
+            if '公斤' in price_unit or 'kg' in price_unit or '千克' in price_unit:
+                data['price'] = round(price * 2, 2)
+                data['price_unit'] = '元/斤'
+                data['convert_note'] = '已由公斤换算为斤'
+            elif '克' in price_unit and '千克' not in price_unit:
+                data['price'] = round(price / 500, 2)
+                data['price_unit'] = '元/斤'
+                data['convert_note'] = '已由克换算为斤'
+            elif '两' in price_unit:
+                data['price'] = round(price / 10, 2)
+                data['price_unit'] = '元/斤'
+                data['convert_note'] = '已由两换算为斤'
+            elif ('总价' in price_unit or '元' == price_unit) and total_weight:
+                try:
+                    data['price'] = round(price / float(total_weight), 2)
+                    data['price_unit'] = '元/斤'
+                    data['convert_note'] = '已由总价/重量换算为斤单价'
+                except Exception:
+                    pass
+        except Exception:
+            pass
+    return data
+
 def extract_product_info_from_image(image_path):
     """从图片中提取产品信息"""
     client = get_openai_client()
@@ -64,18 +98,16 @@ def extract_product_info_from_image(image_path):
         model=model,
         messages=[
             {"role": "system", "content": (
-                "你是一个专业的水果鉴别分析师，请从用户上传的图片中识别出水果名称、水果的新鲜程度、价格, 价格单位。"
-                "最终以JSON格式返回，字段包括：product_name, fresh_level, price, price_unit"
+                "你是一个专业的水果鉴别分析师，请从用户上传的图片中识别出水果名称、水果的新鲜程度、价格, 价格单位, 如果图片显示的是总价请同时返回总重量。"
+                "最终以JSON格式返回，字段包括：product_name, fresh_level, price, price_unit, total_weight"
             )},
             {
                 "role": "user",
                 "content": [
                     {"type": "text", "text": (
-                        "请识别图片中的产品名称和价格，并进行价格分析，注意价格单位"
-                        "请对该产品进行详细分析，分析内容包括：\n"
-                        "1. 注意价格单位；\n"
+                        "请识别图片中的产品名称和价格，并进行价格分析，注意价格单位, 如果图片里面显示的是总价而不是每斤的价格，则需要将总价和总重量都提取出来，并换算成斤为单位的单价价格显示在返回值里面；\n"
                         "2. 新鲜程度，范围0-5，5为最新鲜，0为最不新鲜；\n"
-                        "最终以JSON格式返回，字段包括：product_name, fresh_level, price, price_unit"
+                        "最终以JSON格式返回，字段包括：product_name, fresh_level, price, price_unit, total_weight"
                     )},
                     {"type": "image_url", "image_url": {"url": image_url}}
                 ]
@@ -84,6 +116,7 @@ def extract_product_info_from_image(image_path):
         temperature=0.7
     )
     result = response.choices[0].message.content
+    print("[LOG] LLM raw output (image):", result)
 
     # 尝试直接解析为JSON
     try:
@@ -94,19 +127,19 @@ def extract_product_info_from_image(image_path):
         price = re.search(r'"?price"?\s*[:：]\s*"?([\d.]+)', result)
         price_unit= re.search(r'"?price_unit"?\s*[:：]\s*"?([^",\n]+)', result)
         fresh_level = re.search(r'"?fresh_level"?\s*[:：]\s*"?([^",\n]+)', result)
+        total_weight = re.search(r'"?total_weight"?\s*[:：]\s*"?([^",\n]+)', result)
         data = {
             "product_name": product_name.group(1) if product_name else None,
             "price": price.group(1) if price else None,
             "price_unit": price_unit.group(1) if price_unit else None,
-            "fresh_level": fresh_level.group(1) if fresh_level else None
+            "fresh_level": fresh_level.group(1) if fresh_level else None,
+            "total_weight": total_weight.group(1) if total_weight else None
         }
-    
-    # 价格单位换算
-    price_raw = data.get('price')
-    price_converted, convert_note = convert_to_jin(price_raw)
-    data['price'] = price_converted
-    if convert_note:
-        data['price_convert_note'] = convert_note
+        print("[LOG] 正则提取失败，原始内容:", result)
+    print("[LOG] Parsed data (image):", data)
+    # 自动换算为每斤单价
+    data = postprocess_price(data)
+    print("[LOG] Postprocessed data (image):", data)
     return data
 
 def perform_final_analysis(product_name, price, price_unit=None, image_url=None, fresh_level=None):
@@ -118,6 +151,8 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
     vector_db = get_vector_db(fruit_data)
     bg = vector_db.search(product_name)
     
+    print(f"[LOG] Final analysis input: product_name={product_name}, price={price}, price_unit={price_unit}, fresh_level={fresh_level}")
+
     # 构建用户消息内容
     user_content = [
         {"type": "text", "text": (
@@ -154,7 +189,7 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
                         "3. 与其他类似产品的优势分析；\n"
                         "4. 与其他类似产品的劣势分析；\n"
                         "5. 适合这类产品的用户画像分析。\n"
-                        "每个分析部分只用一句话，且每句话限15个字以内，不要写成自然段。"
+                        "每个分析部分只用一句话，且每句话限25个字以内，不要写成自然段。"
                         "最终以JSON格式返回，字段包括：product_name, price, fresh_level, sweet_level, sour_level, water_level, crisp_level, description, is_overpriced, price_unit, advantage_analysis, disadvantage_analysis, user_profile_analysis, analysis。"
                     )},
                     {"type": "image_url", "image_url": {"url": image_url}}
@@ -164,6 +199,7 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
         temperature=0.7
     )
     result = response.choices[0].message.content
+    print("[LOG] LLM raw output (final analysis):", result)
 
     # 尝试直接解析为JSON
     try:
@@ -196,10 +232,10 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
             "is_overpriced": is_overpriced.group(1) if is_overpriced else None,
             "price_unit": price_unit.group(1) if price_unit else None,
             "advantage_analysis": advantage_analysis.group(1) if advantage_analysis else None,
-            "disadvantage_analysis": disadvantage_analysis.group(1) if disadvantage_analysis else None,
-            "user_profile_analysis": user_profile_analysis.group(1) if user_profile_analysis else None,
-            "analysis": analysis.group(1) if analysis else result
+            "disadvantage_analysis": disadvantage_analysis.group(1) if disadvantage_analysis else None
         }
+        print("[LOG] 正则提取失败 (final analysis)，原始内容:", result)
+    print("[LOG] Parsed data (final analysis):", data)
     return data
 
 def parse_price(price):
