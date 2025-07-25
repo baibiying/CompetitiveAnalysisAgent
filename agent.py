@@ -128,6 +128,7 @@ def extract_product_info_from_image(image_path):
         price_unit= re.search(r'"?price_unit"?\s*[:：]\s*"?([^",\n]+)', result)
         fresh_level = re.search(r'"?fresh_level"?\s*[:：]\s*"?([^",\n]+)', result)
         total_weight = re.search(r'"?total_weight"?\s*[:：]\s*"?([^",\n]+)', result)
+
         data = {
             "product_name": product_name.group(1) if product_name else None,
             "price": price.group(1) if price else None,
@@ -152,25 +153,9 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
     bg = vector_db.search(product_name)
     
     print(f"[LOG] Final analysis input: product_name={product_name}, price={price}, price_unit={price_unit}, fresh_level={fresh_level}")
-
-    # 构建用户消息内容
-    user_content = [
-        {"type": "text", "text": (
-            f"请对该产品{product_name}进行详细分析，该产品价格为{price}"
-            + (f", 价格分析为{price_unit}" if price_unit else "")
-            + "。需要分析的内容包括：\n"
-            "1. 价格分析（与市场价对比、是否合理）；\n"
-            "2. 与其他类似产品的优势分析；\n"
-            "3. 与其他类似产品的劣势分析；\n"
-            "4. 适合这类产品的用户画像分析。\n"
-            "每个分析部分只用一句话，且每句话限15个字以内，不要写成自然段。"
-            "最终以JSON格式返回，字段包括：product_name, price, description, is_overpriced, price_unit, advantage_analysis, disadvantage_analysis, user_profile_analysis, analysis。"
-        )}
-    ]
     
     # 如果有图片，添加图片内容
-    if image_url:
-        user_content.append({"type": "image_url", "image_url": {"url": image_url}})
+
 
     response = client.chat.completions.create(
         model=model,
@@ -189,8 +174,9 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
                         "3. 与其他类似产品的优势分析；\n"
                         "4. 与其他类似产品的劣势分析；\n"
                         "5. 适合这类产品的用户画像分析。\n"
-                        "每个分析部分只用一句话，且每句话限25个字以内，不要写成自然段。"
-                        "最终以JSON格式返回，字段包括：product_name, price, fresh_level, sweet_level, sour_level, water_level, crisp_level, description, is_overpriced, price_unit, advantage_analysis, disadvantage_analysis, user_profile_analysis, analysis。"
+                        "6. 营养成分分析, 简洁列出2-3种该产品包含的维生素, 提供每100克可食部分的热量, GI值（血糖生成指数）, 纤维含量,健康功效。\n"
+                        "营养成分分析最多35个字，其他分析部分限15个字以内。"
+                        "最终以JSON格式返回，字段包括：product_name, price, fresh_level, sweet_level, sour_level, water_level, crisp_level, description, is_overpriced, price_unit, advantage_analysis, disadvantage_analysis, nutrition_analysis。"
                     )},
                     {"type": "image_url", "image_url": {"url": image_url}}
                 ]
@@ -218,8 +204,7 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
         price_unit = re.search(r'"?price_unit"?\s*[:：]\s*"?([^",\n]+)', result)
         advantage_analysis = re.search(r'"?advantage_analysis"?\s*[:：]\s*"?([^",\n]+)', result)
         disadvantage_analysis = re.search(r'"?disadvantage_analysis"?\s*[:：]\s*"?([^",\n]+)', result)
-        user_profile_analysis = re.search(r'"?user_profile_analysis"?\s*[:：]\s*"?([^",\n]+)', result)
-        analysis = re.search(r'"?analysis"?\s*[:：]\s*"?([^\n}]+)', result)
+        nutrition_analysis = re.search(r'"?nutrition_analysis"?\s*[:：]\s*"?([^\n}]+)', result)
         data = {
             "product_name": product_name.group(1) if product_name else None,
             "price": price.group(1) if price else None,
@@ -232,7 +217,8 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
             "is_overpriced": is_overpriced.group(1) if is_overpriced else None,
             "price_unit": price_unit.group(1) if price_unit else None,
             "advantage_analysis": advantage_analysis.group(1) if advantage_analysis else None,
-            "disadvantage_analysis": disadvantage_analysis.group(1) if disadvantage_analysis else None
+            "disadvantage_analysis": disadvantage_analysis.group(1) if disadvantage_analysis else None,
+            "nutrition_analysis": nutrition_analysis.group(1) if nutrition_analysis else None
         }
         print("[LOG] 正则提取失败 (final analysis)，原始内容:", result)
     print("[LOG] Parsed data (final analysis):", data)
