@@ -155,6 +155,17 @@ def perform_final_analysis(product_name, price, price_analysis=None, image_url=N
         }
     return data
 
+def parse_price(price):
+    """从带单位的价格字符串中提取数字部分"""
+    import re
+    if isinstance(price, (int, float)):
+        return float(price)
+    if isinstance(price, str):
+        match = re.search(r"(\d+\.?\d*)", price)
+        if match:
+            return float(match.group(1))
+    return None
+
 def analyze_product(image_path):
     """分析产品（图片输入）"""
     # 从图片中提取产品信息
@@ -175,6 +186,8 @@ def analyze_product(image_path):
     return perform_final_analysis(product_name, price, price_analysis, image_url)
 
 def analyze_product_text(product_name, price):
-    """分析产品（文本输入）"""
-    # 执行最终分析（无图片）
-    return perform_final_analysis(product_name, price) 
+    """分析产品（文本输入，价格必须以斤为单位的字符串）"""
+    if not (isinstance(price, str) and price.strip().endswith('斤')):
+        raise ValueError('价格必须是以“斤”为单位的字符串，如“10.5元/斤”')
+    price_num = parse_price(price)
+    return perform_final_analysis(product_name, price_num) 
