@@ -30,4 +30,6 @@ uvicorn main:app --reload
 
 POST `/analyze`，参数为图片（multipart/form-data, 字段名file）。
 
+curl -X POST "http://127.0.0.1:8000/analyze" -F "file=@fruit.jpg"
+
 返回：产品名、输入价格、AI分析结果。 
