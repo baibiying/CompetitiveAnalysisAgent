@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from agent import analyze_product
 import shutil
 import os
+from agent import analyze_product_text
 
 app = FastAPI()
 
@@ -22,6 +23,5 @@ async def analyze_text(payload: dict = Body(...)):
     product_name = payload.get("product_name")
     price = payload.get("price")
     # analyze_product_text函数待在agent.py实现
-    from agent import analyze_product_text
     result = analyze_product_text(product_name, price)
     return JSONResponse(content=result)

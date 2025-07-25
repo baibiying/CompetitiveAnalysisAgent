@@ -24,5 +24,5 @@ curl -X POST "http://127.0.0.1:8000/analyze_image" -F "file=@fruit.jpg"
 ### 文字分析接口
 POST `/analyze_text`，参数为JSON（字段包括product_name和price）。
 
-curl -X POST "http://127.0.0.1:8000/analyze_text" -H "Content-Type: application/json" -d '{"product_name": "苹果", "price": 10.5}'
+curl -X POST "http://127.0.0.1:8000/analyze_text" -H "Content-Type: application/json" -d '{"product_name": "苹果", "price": 10.5元/斤}'
 

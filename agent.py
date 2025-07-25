@@ -26,11 +26,34 @@ def get_vector_db(fruit_data):
     vector_db.add_document(fruit_data)
     return vector_db
 
+def convert_to_jin(price_str):
+    """将价格字符串换算为斤为单位，返回float价格和换算说明"""
+    import re
+    if not isinstance(price_str, str):
+        return price_str, None
+    # 识别数字和单位
+    match = re.search(r"(\d+\.?\d*)\s*([\u4e00-\u9fa5a-zA-Z/]+)", price_str)
+    if not match:
+        return price_str, None
+    value = float(match.group(1))
+    unit = match.group(2)
+    # 常见单位换算
+    if '公斤' in unit or 'kg' in unit or '千克' in unit:
+        return value * 2, '已由公斤换算为斤'
+    if '克' in unit and '千克' not in unit:
+        return value / 500, '已由克换算为斤'
+    if '两' in unit:
+        return value / 10, '已由两换算为斤'
+    if '斤' in unit:
+        return value, None
+    # 兜底：如果单位未知，直接返回原值
+    return value, f'未知单位{unit}，未换算'
+
 def extract_product_info_from_image(image_path):
     """从图片中提取产品信息"""
     client = get_openai_client()
     model = "kimi-thinking-preview"
-    
+
     # 读取图片为base64编码
     with open(image_path, "rb") as f:
         image_bytes = f.read()
@@ -41,8 +64,8 @@ def extract_product_info_from_image(image_path):
         model=model,
         messages=[
             {"role": "system", "content": (
-                "你是一个专业的产品鉴别分析师，请从用户上传的图片中识别出产品名称、价格以及价格分析。"
-                "最终以JSON格式返回，字段包括：product_name, price"
+                "你是一个专业的水果鉴别分析师，请从用户上传的图片中识别出水果名称、水果的新鲜程度、价格, 价格单位。"
+                "最终以JSON格式返回，字段包括：product_name, fresh_level, price, price_unit"
             )},
             {
                 "role": "user",
@@ -50,8 +73,9 @@ def extract_product_info_from_image(image_path):
                     {"type": "text", "text": (
                         "请识别图片中的产品名称和价格，并进行价格分析，注意价格单位"
                         "请对该产品进行详细分析，分析内容包括：\n"
-                        "1. 价格分析，注意价格单位；\n"
-                        "最终以JSON格式返回，字段包括：product_name, price, price_analysis。"
+                        "1. 注意价格单位；\n"
+                        "2. 新鲜程度，范围0-5，5为最新鲜，0为最不新鲜；\n"
+                        "最终以JSON格式返回，字段包括：product_name, fresh_level, price, price_unit"
                     )},
                     {"type": "image_url", "image_url": {"url": image_url}}
                 ]
@@ -68,16 +92,24 @@ def extract_product_info_from_image(image_path):
         # 若不是标准JSON，尝试用正则提取
         product_name = re.search(r'"?product_name"?\s*[:：]\s*"?([^",\n]+)', result)
         price = re.search(r'"?price"?\s*[:：]\s*"?([\d.]+)', result)
-        price_analysis = re.search(r'"?price_analysis"?\s*[:：]\s*"?([^",\n]+)', result)
+        price_unit= re.search(r'"?price_unit"?\s*[:：]\s*"?([^",\n]+)', result)
+        fresh_level = re.search(r'"?fresh_level"?\s*[:：]\s*"?([^",\n]+)', result)
         data = {
             "product_name": product_name.group(1) if product_name else None,
             "price": price.group(1) if price else None,
-            "price_analysis": price_analysis.group(1) if price_analysis else None,
+            "price_unit": price_unit.group(1) if price_unit else None,
+            "fresh_level": fresh_level.group(1) if fresh_level else None
         }
     
+    # 价格单位换算
+    price_raw = data.get('price')
+    price_converted, convert_note = convert_to_jin(price_raw)
+    data['price'] = price_converted
+    if convert_note:
+        data['price_convert_note'] = convert_note
     return data
 
-def perform_final_analysis(product_name, price, price_analysis=None, image_url=None):
+def perform_final_analysis(product_name, price, price_unit=None, image_url=None, fresh_level=None):
     """执行最终的产品分析"""
     client = get_openai_client()
     model = "kimi-thinking-preview"
@@ -90,14 +122,14 @@ def perform_final_analysis(product_name, price, price_analysis=None, image_url=N
     user_content = [
         {"type": "text", "text": (
             f"请对该产品{product_name}进行详细分析，该产品价格为{price}"
-            + (f", 价格分析为{price_analysis}" if price_analysis else "")
+            + (f", 价格分析为{price_unit}" if price_unit else "")
             + "。需要分析的内容包括：\n"
             "1. 价格分析（与市场价对比、是否合理）；\n"
             "2. 与其他类似产品的优势分析；\n"
             "3. 与其他类似产品的劣势分析；\n"
             "4. 适合这类产品的用户画像分析。\n"
             "每个分析部分只用一句话，且每句话限15个字以内，不要写成自然段。"
-            "最终以JSON格式返回，字段包括：product_name, price, description, is_overpriced, price_analysis, advantage_analysis, disadvantage_analysis, user_profile_analysis, analysis。"
+            "最终以JSON格式返回，字段包括：product_name, price, description, is_overpriced, price_unit, advantage_analysis, disadvantage_analysis, user_profile_analysis, analysis。"
         )}
     ]
     
@@ -109,19 +141,24 @@ def perform_final_analysis(product_name, price, price_analysis=None, image_url=N
         model=model,
         messages=[
             {"role": "system", "content": (
-                "你是一个专业的产品价格分析师。请根据用户输入的产品名称和价格，查询产品的详细描述，并判断该价格是否超出市场公允价格。"
-                "请对该产品进行详细分析，分析内容包括：\n"
-                "1. 价格分析（与市场价对比、是否合理）；\n"
-                "2. 与其他类似产品的优势分析；\n"
-                "3. 与其他类似产品的劣势分析；\n"
-                "4. 适合这类产品的用户画像分析。\n"
-                "每个分析部分只用一句话，且每句话限15个字以内，不要写成自然段。"
-                "最终以JSON格式返回，字段包括：product_name, price, description, is_overpriced, price_analysis, advantage_analysis, disadvantage_analysis, user_profile_analysis, analysis。"
+                "你是一个专业的产品价格分析师。"
             )},
             {
                 "role": "user",
                 "background": f"近一年类似水果产品的品种和价格为：{bg}, 其中价格单位为元/斤",
-                "content": user_content
+                "content": [
+                    {"type": "text", "text": (
+                        f"请对该产品{product_name}进行详细分析，该产品价格为{price}, 价格分析为{price_unit}, 新鲜程度为{fresh_level}。需要分析的内容包括：\n"
+                        "1. 价格分析（与市场价对比、是否合理）；\n"
+                        "2. 该产品的甜度、酸度、水分、脆度（范围0-5）；\n"
+                        "3. 与其他类似产品的优势分析；\n"
+                        "4. 与其他类似产品的劣势分析；\n"
+                        "5. 适合这类产品的用户画像分析。\n"
+                        "每个分析部分只用一句话，且每句话限15个字以内，不要写成自然段。"
+                        "最终以JSON格式返回，字段包括：product_name, price, fresh_level, sweet_level, sour_level, water_level, crisp_level, description, is_overpriced, price_unit, advantage_analysis, disadvantage_analysis, user_profile_analysis, analysis。"
+                    )},
+                    {"type": "image_url", "image_url": {"url": image_url}}
+                ]
             }
         ],
         temperature=0.7
@@ -135,9 +172,14 @@ def perform_final_analysis(product_name, price, price_analysis=None, image_url=N
         # 若不是标准JSON，尝试用正则提取
         product_name = re.search(r'"?product_name"?\s*[:：]\s*"?([^",\n]+)', result)
         price = re.search(r'"?price"?\s*[:：]\s*"?([\d.]+)', result)
+        fresh_level = re.search(r'"?fresh_level"?\s*[:：]\s*"?([^",\n]+)', result)
+        sweet_level = re.search(r'"?sweet_level"?\s*[:：]\s*"?([^",\n]+)', result)
+        sour_level = re.search(r'"?sour_level"?\s*[:：]\s*"?([^",\n]+)', result)
+        water_level = re.search(r'"?water_level"?\s*[:：]\s*"?([^",\n]+)', result)
+        crisp_level = re.search(r'"?crisp_level"?\s*[:：]\s*"?([^",\n]+)', result)
         description = re.search(r'"?description"?\s*[:：]\s*"?([^",\n]+)', result)
         is_overpriced = re.search(r'"?is_overpriced"?\s*[:：]\s*"?([^",\n]+)', result)
-        price_analysis = re.search(r'"?price_analysis"?\s*[:：]\s*"?([^",\n]+)', result)
+        price_unit = re.search(r'"?price_unit"?\s*[:：]\s*"?([^",\n]+)', result)
         advantage_analysis = re.search(r'"?advantage_analysis"?\s*[:：]\s*"?([^",\n]+)', result)
         disadvantage_analysis = re.search(r'"?disadvantage_analysis"?\s*[:：]\s*"?([^",\n]+)', result)
         user_profile_analysis = re.search(r'"?user_profile_analysis"?\s*[:：]\s*"?([^",\n]+)', result)
@@ -145,9 +187,14 @@ def perform_final_analysis(product_name, price, price_analysis=None, image_url=N
         data = {
             "product_name": product_name.group(1) if product_name else None,
             "price": price.group(1) if price else None,
+            "fresh_level": fresh_level.group(1) if fresh_level else None,
+            "sweet_level": sweet_level.group(1) if sweet_level else None,
+            "sour_level": sour_level.group(1) if sour_level else None,
+            "water_level": water_level.group(1) if water_level else None,
+            "crisp_level": crisp_level.group(1) if crisp_level else None,
             "description": description.group(1) if description else None,
             "is_overpriced": is_overpriced.group(1) if is_overpriced else None,
-            "price_analysis": price_analysis.group(1) if price_analysis else None,
+            "price_unit": price_unit.group(1) if price_unit else None,
             "advantage_analysis": advantage_analysis.group(1) if advantage_analysis else None,
             "disadvantage_analysis": disadvantage_analysis.group(1) if disadvantage_analysis else None,
             "user_profile_analysis": user_profile_analysis.group(1) if user_profile_analysis else None,
@@ -172,8 +219,8 @@ def analyze_product(image_path):
     product_info = extract_product_info_from_image(image_path)
     product_name = product_info['product_name']
     price = product_info['price']
-    price_analysis = product_info.get('price_analysis')
-    
+    price_unit = product_info.get('price_unit')
+    fresh_level = product_info.get('fresh_level')
     print(f"提取的产品名: {product_name}")
     
     # 读取图片为base64编码（用于最终分析）
@@ -183,7 +230,7 @@ def analyze_product(image_path):
     image_url = f"data:image/jpeg;base64,{image_base64}"
     
     # 执行最终分析
-    return perform_final_analysis(product_name, price, price_analysis, image_url)
+    return perform_final_analysis(product_name, price, price_unit, image_url, fresh_level)
 
 def analyze_product_text(product_name, price):
     """分析产品（文本输入，价格必须以斤为单位的字符串）"""
