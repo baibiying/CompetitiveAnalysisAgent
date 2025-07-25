@@ -105,10 +105,10 @@ def extract_product_info_from_image(image_path):
     )
     result = response.choices[0].message.content
     print("[LOG] LLM raw output (image):", result)
-
     # 尝试直接解析为JSON
     try:
         data = json.loads(result)
+         
     except Exception:
         # 若不是标准JSON，尝试用正则提取
         product_name = re.search(r'"?product_name"?\s*[:：]\s*"?([^",\n]+)', result)
@@ -128,6 +128,13 @@ def extract_product_info_from_image(image_path):
     print("[LOG] Parsed data (image):", data)
     # 自动换算为每斤单价
     data = postprocess_price(data)
+    # nutrition_analysis字段转为JSON对象
+    nutrition = data.get("nutrition_analysis")
+    if isinstance(nutrition, str):
+        try:
+            data["nutrition_analysis"] = json.loads(nutrition)
+        except Exception:
+            pass
     print("[LOG] Postprocessed data (image):", data)
     return data
 
@@ -164,32 +171,37 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
                 "content": [
                     {"type": "text", "text": (
                         f"请对该产品(product_name:str):{product_name}进行详细分析，该产品价格为(price:float):{price}, 价格分析为(price_unit:str):{price_unit}, 新鲜程度为(fresh_level:int):{fresh_level}。需要分析的内容包括：\n"
-                        f"1. 价格分析(price_analysis:str)（根据市场价预估合理的市场价区间（market_price_range:str）、与市场价对比、是否合理）。已知：当前市场价是: {price_trend[-1]}，如果产品价格超出当前市场价区间最大值每斤1块钱以上，就认为产品溢价\n"
+                        f"1. 价格分析(price_analysis:str)（根据市场价预估合理的市场价区间（market_price_range:str）、与市场价对比、是否合理（is_overpriced:str; 偏高/略高/合理/略低/偏低））。已知：当前市场价是: {price_trend[-1]}，如果产品价格超出当前市场价区间最大值每斤1块钱以上，就认为产品溢价\n"
                         "2. 该产品的甜度(sweet_level:float)、酸度(sour_level:float)、水分(water_level:float)、脆度(crisp_level:float)（范围0-5）；\n"
-                        "3. 与其他类似产品的优势分析(advantage_analysis:str)；\n"
+                        "3. 与其他类似产品的优势分析(advantage_analysis:str), 包括分析品牌独特性在哪里\n"
                         "4. 与其他类似产品的劣势分析(disadvantage_analysis:str)；\n"
-                        "5. 营养成分分析(nutrition_analysis:str), 简洁列出2-3种该产品包含的维生素, 提供每100克可食部分的热量, GI值（血糖生成指数）, 纤维含量,健康功效。\n"
+                        "5. 营养成分分析(nutrition_analysis:str), 营养成分和相应的营养成分含量，形式如”维生素a,100mg,维生素b,200mg,维生素c,300mg“。\n"
                         "6. 产品整体描述（description:str）\n"
                         "营养成分分析最多35个字，其他分析部分限15个字以内。"
-                        "最终以JSON格式返回，字段包括：product_name, price, masket_price_range, fresh_level, sweet_level, sour_level, water_level, crisp_level, description, price_analysis, price_unit, advantage_analysis, disadvantage_analysis, nutrition_analysis"
+                        "最终以JSON格式返回，字段包括：product_name, price, masket_price_range, is_overpriced, fresh_level, sweet_level, sour_level, water_level, crisp_level, description, price_analysis, price_unit, advantage_analysis, disadvantage_analysis, nutrition_analysis"
                     )},
                    # {"type": "image_url", "image_url": {"url": image_url}}
                 ]
             }
-        ],
+        ], response_format={"type": "json_object"},
         temperature=0.7
     )
     result = response.choices[0].message.content
     print("[LOG] LLM raw output (final analysis):", result)
 
     # 尝试直接解析为JSON
+    cleaned_result = clean_json_str(result)
     try:
-        data = json.loads(result)
-    except Exception:
-        # 若不是标准JSON，尝试用正则提取
+        data = json.loads(cleaned_result)
+        print("[LOG] data content:", data)
+    except Exception as e:
+        print("[LOG] json.loads解析失败，异常：", str(e))
+        print("[LOG] LLM原始输出:", result)
+        # 若不是标准JSON，尝试用正则提取主要字段
         product_name = re.search(r'"?product_name"?\s*[:：]\s*"?([^",\n]+)', result)
         price = re.search(r'"?price"?\s*[:：]\s*"?([\d.]+)', result)
         market_price_range = re.search(r'"?market_price_range"?\s*[:：]\s*"?([^",\n]+)', result)
+        is_overpriced = re.search(r'"?is_overpriced"?\s*[:：]\s*"?([^",\n]+)', result)
         fresh_level = re.search(r'"?fresh_level"?\s*[:：]\s*"?([^",\n]+)', result)
         sweet_level = re.search(r'"?sweet_level"?\s*[:：]\s*"?([^",\n]+)', result)
         sour_level = re.search(r'"?sour_level"?\s*[:：]\s*"?([^",\n]+)', result)
@@ -205,6 +217,7 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
             "product_name": product_name.group(1) if product_name else None,
             "price": price.group(1) if price else None,
             "market_price_range": market_price_range.group(1) if market_price_range else None,
+            "is_overpriced": is_overpriced.group(1) if is_overpriced else None,
             "fresh_level": fresh_level.group(1) if fresh_level else None,
             "sweet_level": sweet_level.group(1) if sweet_level else None,
             "sour_level": sour_level.group(1) if sour_level else None,
@@ -217,9 +230,25 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
             "disadvantage_analysis": disadvantage_analysis.group(1) if disadvantage_analysis else None,
             "nutrition_analysis": nutrition_analysis.group(1) if nutrition_analysis else None
         }
+        print("[LOG] data content with regex fallback:", data)
     print(f"当前市场价是: {price_trend[-1]}")
     data['price_trend'] = str(price_trend)
-    print("[LOG] Parsed data (final analysis):", data)
+    nutrition_ls = data['nutrition_analysis'].split(',')
+    nutrition_dict = {}
+    for i in range(0, len(nutrition_ls), 2):
+        nutrition_dict[nutrition_ls[i].strip()] = nutrition_ls[i+1].strip()
+    data['nutrition_analysis'] = nutrition_dict
+
+    '''
+    # nutrition_analysis字段转为JSON对象
+    nutrition = data.get("nutrition_analysis")
+    if isinstance(nutrition, str):
+        try:
+            data["nutrition_analysis"] = json.loads(nutrition)
+        except Exception:
+            pass '''
+
+    print("[LOG] Final response data:", data)
     return data
 
 def parse_price(price):
@@ -293,6 +322,14 @@ def extract_answer(text):
     if match:
         return match.group(1).strip()
     return None
+
+def clean_json_str(s):
+    import re
+    s = s.strip()
+    # 去除 ```json ... ``` 或 ``` ... ```
+    s = re.sub(r"^```(?:json)?", "", s, flags=re.IGNORECASE).strip()
+    s = re.sub(r"```$", "", s).strip()
+    return s
 
 # 主函数
 def search_price(fruit_name):
