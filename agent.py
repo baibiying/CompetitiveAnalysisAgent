@@ -18,7 +18,7 @@ import ast
 
 def get_openai_client():
     """获取OpenAI客户端"""
-    os.environ['MOONSHOT_API_KEY'] = "sk-RuAYrlEMOl4dTcqsbAQ6QEVFkHulSrE1llQvS7qJEKS67VTp"
+    os.environ['MOONSHOT_API_KEY'] = "sk-JGwNBDB0CQ9biJdN13MR2ZVfgnoGjYA0THoUIxw7z7WMDHFh"
     client = openai.OpenAI(
         api_key=os.environ.get("MOONSHOT_API_KEY"),
         base_url="https://api.moonshot.cn/v1"
@@ -155,8 +155,11 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
 
     print(f"prices type: {prices}")
 
-    price_trend =ast.literal_eval(prices)
-
+    if prices:
+        import ast
+        price_trend = ast.literal_eval(prices)
+    else:
+        price_trend = []
     print(f"当前市场价是: {price_trend}")
 
     response = client.chat.completions.create(
@@ -175,7 +178,7 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
                         "2. 该产品的甜度(sweet_level:float)、酸度(sour_level:float)、水分(water_level:float)、脆度(crisp_level:float)（范围0-5）；\n"
                         "3. 与其他类似产品的优势分析(advantage_analysis:str), 包括分析品牌独特性在哪里\n"
                         "4. 与其他类似产品的劣势分析(disadvantage_analysis:str)；\n"
-                        "5. 营养成分分析(nutrition_analysis:str), 营养成分和相应的营养成分含量，形式如”维生素a-100mg-维生素b-200mg-维生素c-300mg“。\n"
+                        "5. 营养成分分析(nutrition_analysis:str), 要求必须返回至少一个营养成分，营养成分和相应的营养成分含量，形式如”维生素a-100mg-维生素b-200mg-维生素c-300mg“。\n"
                         "6. 产品整体描述（description:str）\n"
                         "营养成分分析最多35个字，其他分析部分限15个字以内。"
                         "最终以JSON格式返回，字段包括：product_name, price, masket_price_range, is_overpriced, fresh_level, sweet_level, sour_level, water_level, crisp_level, description, price_analysis, price_unit, advantage_analysis, disadvantage_analysis, nutrition_analysis"
