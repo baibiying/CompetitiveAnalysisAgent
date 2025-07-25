@@ -175,7 +175,7 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
                         "2. 该产品的甜度(sweet_level:float)、酸度(sour_level:float)、水分(water_level:float)、脆度(crisp_level:float)（范围0-5）；\n"
                         "3. 与其他类似产品的优势分析(advantage_analysis:str), 包括分析品牌独特性在哪里\n"
                         "4. 与其他类似产品的劣势分析(disadvantage_analysis:str)；\n"
-                        "5. 营养成分分析(nutrition_analysis:str), 营养成分和相应的营养成分含量，形式如”维生素a,100mg,维生素b,200mg,维生素c,300mg“。\n"
+                        "5. 营养成分分析(nutrition_analysis:str), 营养成分和相应的营养成分含量，形式如”维生素a-100mg-维生素b-200mg-维生素c-300mg“。\n"
                         "6. 产品整体描述（description:str）\n"
                         "营养成分分析最多35个字，其他分析部分限15个字以内。"
                         "最终以JSON格式返回，字段包括：product_name, price, masket_price_range, is_overpriced, fresh_level, sweet_level, sour_level, water_level, crisp_level, description, price_analysis, price_unit, advantage_analysis, disadvantage_analysis, nutrition_analysis"
@@ -183,19 +183,16 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
                    # {"type": "image_url", "image_url": {"url": image_url}}
                 ]
             }
-        ], response_format={"type": "json_object"},
+        ],
         temperature=0.7
     )
     result = response.choices[0].message.content
     print("[LOG] LLM raw output (final analysis):", result)
 
-    # 尝试直接解析为JSON
-    cleaned_result = clean_json_str(result)
     try:
-        data = json.loads(cleaned_result)
+        data = json.loads(result)
         print("[LOG] data content:", data)
     except Exception as e:
-        print("[LOG] json.loads解析失败，异常：", str(e))
         print("[LOG] LLM原始输出:", result)
         # 若不是标准JSON，尝试用正则提取主要字段
         product_name = re.search(r'"?product_name"?\s*[:：]\s*"?([^",\n]+)', result)
@@ -212,7 +209,7 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
         price_unit = re.search(r'"?price_unit"?\s*[:：]\s*"?([^",\n]+)', result)
         advantage_analysis = re.search(r'"?advantage_analysis"?\s*[:：]\s*"?([^",\n]+)', result)
         disadvantage_analysis = re.search(r'"?disadvantage_analysis"?\s*[:：]\s*"?([^",\n]+)', result)
-        nutrition_analysis = re.search(r'"?nutrition_analysis"?\s*[:：]\s*"?([^\n}]+)', result)
+        nutrition_analysis = re.search(r'"?nutrition_analysis"?\s*[:：]\s*"?([^",\n]+)', result)
         data = {
             "product_name": product_name.group(1) if product_name else None,
             "price": price.group(1) if price else None,
@@ -233,10 +230,18 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
         print("[LOG] data content with regex fallback:", data)
     print(f"当前市场价是: {price_trend[-1]}")
     data['price_trend'] = str(price_trend)
-    nutrition_ls = data['nutrition_analysis'].split(',')
+    nutrition_ls = data['nutrition_analysis'].split('-')
     nutrition_dict = {}
     for i in range(0, len(nutrition_ls), 2):
-        nutrition_dict[nutrition_ls[i].strip()] = nutrition_ls[i+1].strip()
+    # 检查是否有对应的值
+        if i + 1 < len(nutrition_ls):
+            key = nutrition_ls[i].strip()
+            value = nutrition_ls[i + 1].strip()
+            nutrition_dict[key] = value
+        else:
+            # 如果没有对应的值，可以记录一个特殊的值（例如 None 或空字符串）
+            key = nutrition_ls[i].strip()
+            nutrition_dict[key] = None
     data['nutrition_analysis'] = nutrition_dict
 
     '''
