@@ -116,8 +116,8 @@ def extract_product_info_from_image(image_path):
                 "role": "user",
                 "content": [
                     {"type": "text", "text": (
-                        "请识别图片中的产品名称和价格，并进行价格分析，注意价格单位, 如果图片里面显示的是总价而不是每斤的价格，则需要将总价和总重量都提取出来，并换算成斤为单位的单价价格显示在返回值里面；\n"
-                        "2. 新鲜程度，范围0-5，5为最新鲜，0为最不新鲜；\n"
+                        "1. 请识别图片中的产品名称(product_name:str)和价格(price:float)，并进行价格分析，注意价格单位(price_unit:str), 如果图片里面显示的是总价而不是每斤的价格，则需要将总价和总重量(total_weight:float)都提取出来，并换算成斤为单位的单价价格显示在返回值里面；\n"
+                        "2. 新鲜程度(fresh_level:float)，范围0-5，5为最新鲜，0为最不新鲜；\n"
                         "最终以JSON格式返回，字段包括：product_name, fresh_level, price, price_unit, total_weight"
                     )},
                     {"type": "image_url", "image_url": {"url": image_url}}
@@ -186,15 +186,14 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
                 "background": f"近一年类似水果产品的品种和价格为：{bg}, 其中价格单位为元/斤。",
                 "content": [
                     {"type": "text", "text": (
-                        f"请对该产品{product_name}进行详细分析，该产品价格为{price}, 价格分析为{price_unit}, 新鲜程度为{fresh_level}。需要分析的内容包括：\n"
-                        f"1. 价格分析（与市场价对比、是否合理）；当前市场价是: {price_trend[-1]}。如果产品价格超出当前市场价1块钱以上，就认为产品overpriced\n"
-                        "2. 该产品的甜度、酸度、水分、脆度（范围0-5）；\n"
-                        "3. 与其他类似产品的优势分析；\n"
-                        "4. 与其他类似产品的劣势分析；\n"
-                        "5. 适合这类产品的用户画像分析。\n"
-                        "6. 营养成分分析, 简洁列出2-3种该产品包含的维生素, 提供每100克可食部分的热量, GI值（血糖生成指数）, 纤维含量,健康功效。\n"
+                        f"请对该产品(product_name:str):{product_name}进行详细分析，该产品价格为(price:float):{price}, 价格分析为(price_unit:str):{price_unit}, 新鲜程度为(fresh_level:int):{fresh_level}。需要分析的内容包括：\n"
+                        f"1. 价格分析(price_analysis:str)（根据市场价预估合理的市场价区间（market_price_range:str）、与市场价对比、是否合理）。已知：当前市场价是: {price_trend[-1]}，如果产品价格超出当前市场价区间最大值每斤1块钱以上，就认为产品溢价\n"
+                        "2. 该产品的甜度(sweet_level:float)、酸度(sour_level:float)、水分(water_level:float)、脆度(crisp_level:float)（范围0-5）；\n"
+                        "3. 与其他类似产品的优势分析(advantage_analysis:str)；\n"
+                        "4. 与其他类似产品的劣势分析(disadvantage_analysis:str)；\n"
+                        "5. 营养成分分析(nutrition_analysis:str), 简洁列出2-3种该产品包含的维生素, 提供每100克可食部分的热量, GI值（血糖生成指数）, 纤维含量,健康功效。\n"
                         "营养成分分析最多35个字，其他分析部分限15个字以内。"
-                        "最终以JSON格式返回，字段包括：product_name, price, fresh_level, sweet_level, sour_level, water_level, crisp_level, description, price_analysis, price_unit, advantage_analysis, disadvantage_analysis, nutrition_analysis"
+                        "最终以JSON格式返回，字段包括：product_name, price, masket_price_range, fresh_level, sweet_level, sour_level, water_level, crisp_level, description, price_analysis, price_unit, advantage_analysis, disadvantage_analysis, nutrition_analysis"
                     )},
                     {"type": "image_url", "image_url": {"url": image_url}}
                 ]
@@ -212,6 +211,7 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
         # 若不是标准JSON，尝试用正则提取
         product_name = re.search(r'"?product_name"?\s*[:：]\s*"?([^",\n]+)', result)
         price = re.search(r'"?price"?\s*[:：]\s*"?([\d.]+)', result)
+        market_price_range = re.search(r'"?market_price_range"?\s*[:：]\s*"?([^",\n]+)', result)
         fresh_level = re.search(r'"?fresh_level"?\s*[:：]\s*"?([^",\n]+)', result)
         sweet_level = re.search(r'"?sweet_level"?\s*[:：]\s*"?([^",\n]+)', result)
         sour_level = re.search(r'"?sour_level"?\s*[:：]\s*"?([^",\n]+)', result)
@@ -226,6 +226,7 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
         data = {
             "product_name": product_name.group(1) if product_name else None,
             "price": price.group(1) if price else None,
+            "market_price_range": market_price_range.group(1) if market_price_range else None,
             "fresh_level": fresh_level.group(1) if fresh_level else None,
             "sweet_level": sweet_level.group(1) if sweet_level else None,
             "sour_level": sour_level.group(1) if sour_level else None,
@@ -239,7 +240,7 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
             "nutrition_analysis": nutrition_analysis.group(1) if nutrition_analysis else None
         }
     print(f"当前市场价是: {price_trend[-1]}")
-    data['market_price'] = price_trend[-1]
+    data['price_trend'] = str(price_trend)
     print("[LOG] Parsed data (final analysis):", data)
     return data
 
@@ -327,10 +328,9 @@ def search_price(fruit_name):
         "role": "user",
         "content": (
             f"你的任务是联网搜索近6个月浙江省{fruit_name}正常价格数据，返回近6个月{fruit_name}的正常价格（单位：元/斤），按时间顺序组成一个列表，索引值最大的对应最新价格。输出仅需列表，不要有任何其他内容。\n"
-            "以下是近6个月浙江省麒麟西瓜价格数据：\n"
             "请按照以下步骤完成任务：\n"
             f"1. 联网搜索近6个月浙江省{fruit_name}价格数据，当前时间为{today_str}\n"
-            "2. 仔细分析价格数据，从中提取近6个月浙江省麒麟西瓜的正常市场价格信息。\n"
+            f"2. 仔细分析价格数据，从中提取近6个月浙江省{fruit_name}的正常市场价格信息。\n"
             "3. 按照时间顺序对价格信息进行排序，确保索引值最大的对应最新价格。\n"
             "4. 形成一个仅包含价格的列表。\n"
             "\n"
