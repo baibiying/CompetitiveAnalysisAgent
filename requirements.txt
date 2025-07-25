@@ -8,3 +8,4 @@ langchain-community
 python-multipart 
 serpapi
 google-search-results
+sentence-transformers             

@@ -24,8 +24,8 @@ def analyze_product(image_path):
         model=model,
         messages=[
             {"role": "system", "content": (
-                "你是一个专业的产品鉴别分析师，请从用户上传的图片中识别出产品名称、价格以及价格分析。"
-                "最终以JSON格式返回，字段包括：product_name, price"
+                "你是一个专业的水果鉴别分析师，请从用户上传的图片中识别出水果名称、水果的新鲜程度、价格和价格分析。"
+                "最终以JSON格式返回，字段包括：product_name, fresh_level, price, price_analysis"
             )},
             {
                 "role": "user",
@@ -34,7 +34,8 @@ def analyze_product(image_path):
                         "请识别图片中的产品名称和价格，并进行价格分析，注意价格单位"
                         "请对该产品进行详细分析，分析内容包括：\n"
                         "1. 价格分析，注意价格单位；\n"
-                        "最终以JSON格式返回，字段包括：product_name, price, price_analysis。"
+                        "2. 新鲜程度，范围0-5，5为最新鲜，0为最不新鲜；\n"
+                        "最终以JSON格式返回，字段包括：product_name, fresh_level, price, price_analysis。"
                     )},
                     {"type": "image_url", "image_url": {"url": image_url}}
                 ]
@@ -50,12 +51,14 @@ def analyze_product(image_path):
     except Exception:
         # 若不是标准JSON，尝试用正则提取
         product_name = re.search(r'"?product_name"?\s*[:：]\s*"?([^",\n]+)', result)
+        fresh_level = re.search(r'"?fresh_level"?\s*[:：]\s*"?([^",\n]+)', result)
         price = re.search(r'"?price"?\s*[:：]\s*"?([\d.]+)', result)
         price_analysis = re.search(r'"?price_analysis"?\s*[:：]\s*"?([^",\n]+)', result)
         data = {
             "product_name": product_name.group(1) if product_name else None,
+            "fresh_level": fresh_level.group(1) if fresh_level else None,
             "price": price.group(1) if price else None,
-            "price_analysis": price_analysis.group(1) if price_analysis else None,
+            "price_analysis": price_analysis.group(1) if price_analysis else None
         }
 
     fruit_name = data['product_name']
@@ -86,13 +89,14 @@ def analyze_product(image_path):
                 "background": f"近一年类似水果产品的品种和价格为：{bg}, 其中价格单位为元/斤",
                 "content": [
                     {"type": "text", "text": (
-                        f"请对该产品{fruit_name}进行详细分析，该产品价格为{data['price']}, 价格分析为{data['price_analysis']}。需要分析的内容包括：\n"
+                        f"请对该产品{fruit_name}进行详细分析，该产品价格为{data['price']}, 价格分析为{data['price_analysis']}, 新鲜程度为{data['fresh_level']}。需要分析的内容包括：\n"
                         "1. 价格分析（与市场价对比、是否合理）；\n"
-                        "2. 与其他类似产品的优势分析；\n"
-                        "3. 与其他类似产品的劣势分析；\n"
-                        "4. 适合这类产品的用户画像分析。\n"
+                        "2. 该产品的甜度、酸度、水分、脆度（范围0-5）；\n"
+                        "3. 与其他类似产品的优势分析；\n"
+                        "4. 与其他类似产品的劣势分析；\n"
+                        "5. 适合这类产品的用户画像分析。\n"
                         "每个分析部分只用一句话，且每句话限15个字以内，不要写成自然段。"
-                        "最终以JSON格式返回，字段包括：product_name, price, description, is_overpriced, price_analysis, advantage_analysis, disadvantage_analysis, user_profile_analysis, analysis。"
+                        "最终以JSON格式返回，字段包括：product_name, price, fresh_level, sweet_level, sour_level, water_level, crisp_level, description, is_overpriced, price_analysis, advantage_analysis, disadvantage_analysis, user_profile_analysis, analysis。"
                     )},
                     {"type": "image_url", "image_url": {"url": image_url}}
                 ]
@@ -109,6 +113,11 @@ def analyze_product(image_path):
         # 若不是标准JSON，尝试用正则提取
         product_name = re.search(r'"?product_name"?\s*[:：]\s*"?([^",\n]+)', result)
         price = re.search(r'"?price"?\s*[:：]\s*"?([\d.]+)', result)
+        fresh_level = re.search(r'"?fresh_level"?\s*[:：]\s*"?([^",\n]+)', result)
+        sweet_level = re.search(r'"?sweet_level"?\s*[:：]\s*"?([^",\n]+)', result)
+        sour_level = re.search(r'"?sour_level"?\s*[:：]\s*"?([^",\n]+)', result)
+        water_level = re.search(r'"?water_level"?\s*[:：]\s*"?([^",\n]+)', result)
+        crisp_level = re.search(r'"?crisp_level"?\s*[:：]\s*"?([^",\n]+)', result)
         description = re.search(r'"?description"?\s*[:：]\s*"?([^",\n]+)', result)
         is_overpriced = re.search(r'"?is_overpriced"?\s*[:：]\s*"?([^",\n]+)', result)
         price_analysis = re.search(r'"?price_analysis"?\s*[:：]\s*"?([^",\n]+)', result)
@@ -119,6 +128,11 @@ def analyze_product(image_path):
         data = {
             "product_name": product_name.group(1) if product_name else None,
             "price": price.group(1) if price else None,
+            "fresh_level": fresh_level.group(1) if fresh_level else None,
+            "sweet_level": sweet_level.group(1) if sweet_level else None,
+            "sour_level": sour_level.group(1) if sour_level else None,
+            "water_level": water_level.group(1) if water_level else None,
+            "crisp_level": crisp_level.group(1) if crisp_level else None,
             "description": description.group(1) if description else None,
             "is_overpriced": is_overpriced.group(1) if is_overpriced else None,
             "price_analysis": price_analysis.group(1) if price_analysis else None,
@@ -127,4 +141,5 @@ def analyze_product(image_path):
             "user_profile_analysis": user_profile_analysis.group(1) if user_profile_analysis else None,
             "analysis": analysis.group(1) if analysis else result
         }
+    print(data)
     return data 
