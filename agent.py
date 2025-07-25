@@ -196,7 +196,7 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
                         "营养成分分析最多35个字，其他分析部分限15个字以内。"
                         "最终以JSON格式返回，字段包括：product_name, price, masket_price_range, fresh_level, sweet_level, sour_level, water_level, crisp_level, description, price_analysis, price_unit, advantage_analysis, disadvantage_analysis, nutrition_analysis"
                     )},
-                    {"type": "image_url", "image_url": {"url": image_url}}
+                   # {"type": "image_url", "image_url": {"url": image_url}}
                 ]
             }
         ],
