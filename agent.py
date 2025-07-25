@@ -4,10 +4,21 @@ import base64
 import json
 import re
 from retrievers import ChromaRetriever
+from openai.types.chat.chat_completion import Choice
+from typing import Dict, Any
+import json
+import os
+import time
+import datetime
+from typing import Dict, Any
+from openai import OpenAI
+from openai.types.chat.chat_completion import Choice
+import re
+import ast
 
 def get_openai_client():
     """获取OpenAI客户端"""
-    os.environ['MOONSHOT_API_KEY'] = "sk-XgFQs9dC5L5ynGZyVODjin1dFMhnNtM3OqdMCLfO5qSDuYco"
+    os.environ['MOONSHOT_API_KEY'] = "sk-RuAYrlEMOl4dTcqsbAQ6QEVFkHulSrE1llQvS7qJEKS67VTp"
     client = openai.OpenAI(
         api_key=os.environ.get("MOONSHOT_API_KEY"),
         base_url="https://api.moonshot.cn/v1"
@@ -156,6 +167,13 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
     
     # 如果有图片，添加图片内容
 
+    prices = search_price(product_name)
+
+    print(f"prices type: {prices}")
+
+    price_trend =ast.literal_eval(prices)
+
+    print(f"当前市场价是: {price_trend}")
 
     response = client.chat.completions.create(
         model=model,
@@ -165,18 +183,18 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
             )},
             {
                 "role": "user",
-                "background": f"近一年类似水果产品的品种和价格为：{bg}, 其中价格单位为元/斤",
+                "background": f"近一年类似水果产品的品种和价格为：{bg}, 其中价格单位为元/斤。",
                 "content": [
                     {"type": "text", "text": (
                         f"请对该产品{product_name}进行详细分析，该产品价格为{price}, 价格分析为{price_unit}, 新鲜程度为{fresh_level}。需要分析的内容包括：\n"
-                        "1. 价格分析（与市场价对比、是否合理）；\n"
+                        f"1. 价格分析（与市场价对比、是否合理）；当前市场价是: {price_trend[-1]}。如果产品价格超出当前市场价1块钱以上，就认为产品overpriced\n"
                         "2. 该产品的甜度、酸度、水分、脆度（范围0-5）；\n"
                         "3. 与其他类似产品的优势分析；\n"
                         "4. 与其他类似产品的劣势分析；\n"
                         "5. 适合这类产品的用户画像分析。\n"
                         "6. 营养成分分析, 简洁列出2-3种该产品包含的维生素, 提供每100克可食部分的热量, GI值（血糖生成指数）, 纤维含量,健康功效。\n"
                         "营养成分分析最多35个字，其他分析部分限15个字以内。"
-                        "最终以JSON格式返回，字段包括：product_name, price, fresh_level, sweet_level, sour_level, water_level, crisp_level, description, is_overpriced, price_unit, advantage_analysis, disadvantage_analysis, nutrition_analysis。"
+                        "最终以JSON格式返回，字段包括：product_name, price, fresh_level, sweet_level, sour_level, water_level, crisp_level, description, price_analysis, price_unit, advantage_analysis, disadvantage_analysis, nutrition_analysis"
                     )},
                     {"type": "image_url", "image_url": {"url": image_url}}
                 ]
@@ -200,7 +218,7 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
         water_level = re.search(r'"?water_level"?\s*[:：]\s*"?([^",\n]+)', result)
         crisp_level = re.search(r'"?crisp_level"?\s*[:：]\s*"?([^",\n]+)', result)
         description = re.search(r'"?description"?\s*[:：]\s*"?([^",\n]+)', result)
-        is_overpriced = re.search(r'"?is_overpriced"?\s*[:：]\s*"?([^",\n]+)', result)
+        price_analysis = re.search(r'"?price_analysis"?\s*[:：]\s*"?([^",\n]+)', result)
         price_unit = re.search(r'"?price_unit"?\s*[:：]\s*"?([^",\n]+)', result)
         advantage_analysis = re.search(r'"?advantage_analysis"?\s*[:：]\s*"?([^",\n]+)', result)
         disadvantage_analysis = re.search(r'"?disadvantage_analysis"?\s*[:：]\s*"?([^",\n]+)', result)
@@ -214,13 +232,14 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
             "water_level": water_level.group(1) if water_level else None,
             "crisp_level": crisp_level.group(1) if crisp_level else None,
             "description": description.group(1) if description else None,
-            "is_overpriced": is_overpriced.group(1) if is_overpriced else None,
+            "price_analysis": price_analysis.group(1) if price_analysis else None,
             "price_unit": price_unit.group(1) if price_unit else None,
             "advantage_analysis": advantage_analysis.group(1) if advantage_analysis else None,
             "disadvantage_analysis": disadvantage_analysis.group(1) if disadvantage_analysis else None,
             "nutrition_analysis": nutrition_analysis.group(1) if nutrition_analysis else None
         }
-        print("[LOG] 正则提取失败 (final analysis)，原始内容:", result)
+    print(f"当前市场价是: {price_trend[-1]}")
+    data['market_price'] = price_trend[-1]
     print("[LOG] Parsed data (final analysis):", data)
     return data
 
@@ -260,3 +279,89 @@ def analyze_product_text(product_name, price):
         raise ValueError('价格必须是以“斤”为单位的字符串，如“10.5元/斤”')
     price_num = parse_price(price)
     return perform_final_analysis(product_name, price_num) 
+
+
+# 定义搜索工具的具体实现
+def search_impl(arguments: Dict[str, Any]) -> Any:
+    return arguments
+
+# 定义聊天函数
+def chat(messages) -> Choice:
+    client = get_openai_client()
+    completion = client.chat.completions.create(
+        model="kimi-k2-0711-preview",  # 使用Kimi模型
+        messages=messages,
+        temperature=0.6,
+        tools=[
+            {
+                "type": "builtin_function",  # 使用内置函数
+                "function": {
+                    "name": "$web_search",  # 使用内置的联网搜索功能
+                },
+            }
+        ]
+    )
+
+    return completion.choices[0]
+
+def extract_answer(text):
+    # 先尝试英文标签
+    match = re.search(r"<answer>(.*?)</answer>", text, re.DOTALL | re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    # 再尝试中文标签
+    match = re.search(r"<回答>(.*?)</回答>", text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    return None
+
+# 主函数
+def search_price(fruit_name):
+    today = datetime.date.today()
+    today_str = f"{today.year}年{today.month}月{today.day}日"
+    messages = [
+        {"role": "system", "content": "你是水果市场价格分析专家，请根据用户的问题，分析水果市场价格，并给出分析结果。"},
+    ]
+    # 初始提问
+    messages.append({
+        "role": "user",
+        "content": (
+            f"你的任务是联网搜索近6个月浙江省{fruit_name}正常价格数据，返回近6个月{fruit_name}的正常价格（单位：元/斤），按时间顺序组成一个列表，索引值最大的对应最新价格。输出仅需列表，不要有任何其他内容。\n"
+            "以下是近6个月浙江省麒麟西瓜价格数据：\n"
+            "请按照以下步骤完成任务：\n"
+            f"1. 联网搜索近6个月浙江省{fruit_name}价格数据，当前时间为{today_str}\n"
+            "2. 仔细分析价格数据，从中提取近6个月浙江省麒麟西瓜的正常市场价格信息。\n"
+            "3. 按照时间顺序对价格信息进行排序，确保索引值最大的对应最新价格。\n"
+            "4. 形成一个仅包含价格的列表。\n"
+            "\n"
+            "在<思考>标签中详细阐述你从数据中提取价格、排序等步骤的思维过程。然后在<回答>标签中输出最终的价格列表。\n"
+            "<思考>\n"
+            "[在此详细说明你的思维过程]\n"
+            "</思考>\n"
+            "<回答>\n"
+            "[在此输出最终的价格列表]\n"
+            "</回答>"
+        )
+    })
+    finish_reason = None
+    while finish_reason is None or finish_reason == "tool_calls":
+        choice = chat(messages)
+        finish_reason = choice.finish_reason
+        if finish_reason == "tool_calls":  # 判断当前返回内容是否包含 tool_calls
+            messages.append(choice.message)  # 将模型返回的 assistant 消息添加到上下文中
+            for tool_call in choice.message.tool_calls:  # 处理每个工具调用
+                tool_call_name = tool_call.function.name
+                tool_call_arguments = json.loads(tool_call.function.arguments)  # 反序列化参数
+                if tool_call_name == "$web_search":
+                    tool_result = search_impl(tool_call_arguments)
+                else:
+                    tool_result = f"Error: unable to find tool by name '{tool_call_name}'"
+                # 将工具执行结果添加到消息中
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "name": tool_call_name,
+                    "content": json.dumps(tool_result),
+                })
+    answer = extract_answer(choice.message.content)
+    return answer
