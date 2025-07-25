@@ -37,29 +37,6 @@ def get_vector_db(fruit_data):
     vector_db.add_document(fruit_data)
     return vector_db
 
-def convert_to_jin(price_str):
-    """将价格字符串换算为斤为单位，返回float价格和换算说明"""
-    import re
-    if not isinstance(price_str, str):
-        return price_str, None
-    # 识别数字和单位
-    match = re.search(r"(\d+\.?\d*)\s*([\u4e00-\u9fa5a-zA-Z/]+)", price_str)
-    if not match:
-        return price_str, None
-    value = float(match.group(1))
-    unit = match.group(2)
-    # 常见单位换算
-    if '公斤' in unit or 'kg' in unit or '千克' in unit:
-        return value * 2, '已由公斤换算为斤'
-    if '克' in unit and '千克' not in unit:
-        return value / 500, '已由克换算为斤'
-    if '两' in unit:
-        return value / 10, '已由两换算为斤'
-    if '斤' in unit:
-        return value, None
-    # 兜底：如果单位未知，直接返回原值
-    return value, f'未知单位{unit}，未换算'
-
 def postprocess_price(data):
     """根据price_unit和total_weight自动换算为每斤单价"""
     price = data.get('price')
