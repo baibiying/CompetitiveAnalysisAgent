@@ -8,3 +8,7 @@ langchain-community
 python-multipart 
 serpapi
 google-search-results
+chromadb 
+nltk 
+sentence_transformers 
+jieba
