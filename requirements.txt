@@ -12,3 +12,4 @@ chromadb
 nltk 
 sentence_transformers 
 jieba
+rank_bm25

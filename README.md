@@ -8,18 +8,6 @@
 pip install -r requirements.txt
 ```
 
-## API Key 配置
-
-需要设置环境变量：
-- `OPENAI_API_KEY`：OpenAI API Key
-- `SERPAPI_API_KEY`：SerpAPI Key（用于联网搜索）
-
-可在命令行运行：
-```bash
-export OPENAI_API_KEY=你的key
-export SERPAPI_API_KEY=你的key
-```
-
 ## 启动服务
 
 ```bash
@@ -28,8 +16,13 @@ uvicorn main:app --reload
 
 ## API 使用
 
-POST `/analyze`，参数为图片（multipart/form-data, 字段名file）。
+### 图片分析接口
+POST `/analyze_image`，参数为图片（multipart/form-data, 字段名file）。
 
-curl -X POST "http://127.0.0.1:8000/analyze" -F "file=@fruit.jpg"
+curl -X POST "http://127.0.0.1:8000/analyze_image" -F "file=@fruit.jpg"
 
-返回：产品名、输入价格、AI分析结果。 
+### 文字分析接口
+POST `/analyze_text`，参数为JSON（字段包括product_name和price）。
+
+curl -X POST "http://127.0.0.1:8000/analyze_text" -H "Content-Type: application/json" -d '{"product_name": "苹果", "price": 10.5}'
+
