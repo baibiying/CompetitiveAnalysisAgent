@@ -18,10 +18,10 @@ import ast
 
 def get_openai_client():
     """获取OpenAI客户端"""
-    os.environ['MOONSHOT_API_KEY'] = "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"
+    os.environ['MOONSHOT_API_KEY'] = "your_api_key"
     client = openai.OpenAI(
         api_key=os.environ.get("MOONSHOT_API_KEY"),
-        # base_url="https://api.moonshot.cn/v1"
+        base_url="https://api.moonshot.cn/v1"
     )
     return client
 
@@ -74,7 +74,7 @@ def postprocess_price(data):
 def extract_product_info_from_image(image_path):
     """从图片中提取产品信息"""
     client = get_openai_client()
-    model = "gpt-4.1"
+    model = "kimi-k2-0711-preview"
 
     # 读取图片为base64编码
     with open(image_path, "rb") as f:
@@ -141,7 +141,7 @@ def extract_product_info_from_image(image_path):
 def perform_final_analysis(product_name, price, price_unit=None, image_url=None, fresh_level=None):
     """执行最终的产品分析"""
     client = get_openai_client()
-    model = "gpt-4.1"
+    model = "kimi-k2-0711-preview"
     
     fruit_data = get_fruit_data()
     vector_db = get_vector_db(fruit_data)
