@@ -162,6 +162,27 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
         price_trend = []
     print(f"当前市场价是: {price_trend}")
 
+    if(len(price_trend) == 0):
+        data = {
+            "product_name": product_name,
+            "price": price,
+            "market_price_range": None,
+            "is_overpriced": None,
+            "fresh_level": None,
+            "sweet_level": None,
+            "sour_level": None,
+            "water_level": None,
+            "crisp_level": None,
+            "description": None,
+            "price_analysis": None,
+            "price_unit": None,
+            "advantage_analysis": None,
+            "disadvantage_analysis": None,
+            "nutrition_analysis": None,
+            "price_trend": None
+        }
+        return data
+
     response = client.chat.completions.create(
         model=model,
         messages=[
