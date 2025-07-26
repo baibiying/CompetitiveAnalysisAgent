@@ -233,18 +233,22 @@ def perform_final_analysis(product_name, price, price_unit=None, image_url=None,
         print("[LOG] data content with regex fallback:", data)
     print(f"当前市场价是: {price_trend[-1]}")
     data['price_trend'] = str(price_trend)
-    nutrition_ls = data['nutrition_analysis'].split('-')
-    nutrition_dict = {}
-    for i in range(0, len(nutrition_ls), 2):
+    nutrition_ls = None
+    nutrition_dict = None
+    if(data['nutrition_analysis'] is not None):
+        nutrition_ls = data['nutrition_analysis'].split('-')
+        nutrition_dict = {}
+        for i in range(0, len(nutrition_ls), 2):
     # 检查是否有对应的值
-        if i + 1 < len(nutrition_ls):
-            key = nutrition_ls[i].strip()
-            value = nutrition_ls[i + 1].strip()
-            nutrition_dict[key] = value
-        else:
-            # 如果没有对应的值，可以记录一个特殊的值（例如 None 或空字符串）
-            key = nutrition_ls[i].strip()
-            nutrition_dict[key] = None
+            if i + 1 < len(nutrition_ls):
+                key = nutrition_ls[i].strip()
+                value = nutrition_ls[i + 1].strip()
+                nutrition_dict[key] = value
+            else:
+                # 如果没有对应的值，可以记录一个特殊的值（例如 None 或空字符串）
+                key = nutrition_ls[i].strip()
+                nutrition_dict[key] = None
+    
     data['nutrition_analysis'] = nutrition_dict
 
     '''
