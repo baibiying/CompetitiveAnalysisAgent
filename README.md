@@ -26,3 +26,35 @@ POST `/analyze_text`，参数为JSON（字段包括product_name和price）。
 
 curl -X POST "http://127.0.0.1:8000/analyze_text" -H "Content-Type: application/json" -d '{"product_name": "苹果", "price": "10.5元/斤"}'
 
+### 水果推荐接口
+POST `/recommend_fruits`，参数为JSON（字段包括budget, special_remark, available_fruits）。
+
+**请求示例：**
+```bash
+curl -X POST "http://127.0.0.1:8000/recommend_fruits" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "budget": "50元",
+    "special_remark": "需要新鲜的水果",
+    "available_fruits": ["苹果", "梨", "香蕉", "橙子"]
+  }'
+```
+
+**参数说明：**
+- `budget`：预算金额（如 "50元"）
+- `special_remark`：特殊要求（如 "需要新鲜的水果"）
+- `available_fruits`：可选水果列表（如 ["苹果", "梨", "香蕉"]）
+
+**响应示例：**
+```json
+{
+  "success": true,
+  "data": "AI推荐结果字符串",
+  "input": {
+    "budget": "50元",
+    "special_remark": "需要新鲜的水果",
+    "available_fruits": ["苹果", "梨", "香蕉", "橙子"]
+  }
+}
+```
+
